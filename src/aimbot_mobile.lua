@@ -1,7 +1,3 @@
--- SC Aimbot Mobile - Rayfield UI
--- Mobile only, touch hold to aim
--- Load dengan: loadstring(game:HttpGet("https://raw.githubusercontent.com/skyzensc9/sc.aimbot/main/src/aimbot_mobile.lua"))()
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -9,8 +5,8 @@ local Camera = workspace.CurrentCamera
 
 local LocalPlayer = Players.LocalPlayer
 
--- Load Rayfield UI
-local Rayfield = loadstring(game:HttpGet("https://sirius.menu/rayfield"))()
+-- Gunakan Rayfield official source
+local Rayfield = loadstring(game:HttpGet("https://raw.githubusercontent.com/shlexware/Rayfield/main/source.lua"))()
 
 local Window = Rayfield:CreateWindow({
     Name = "SC Aimbot Mobile",
@@ -23,6 +19,10 @@ local Window = Rayfield:CreateWindow({
     },
     KeySystem = false
 })
+
+local MainTab = Window:CreateTab("Main", 13047715)
+local SettingsTab = Window:CreateTab("Settings", 3926305)
+local InfoTab = Window:CreateTab("Info", 5028892)
 
 local CONFIG = {
     ENABLED = true,
@@ -40,11 +40,6 @@ local CONFIG = {
     ESP_COLOR_FRIEND = Color3.fromRGB(0, 255, 0),
 }
 
-local AimbotState = {
-    Active = false,
-    TargetPlayer = nil,
-    TargetPosition = nil,
-}
 local ESPLabels = {}
 local AimbotActive = false
 
@@ -71,6 +66,7 @@ local function GetPlayerDistance(player)
     if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         return math.huge
     end
+
     if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then
         return math.huge
     end
@@ -83,7 +79,7 @@ local function GetHead(player)
     return player.Character:FindFirstChild("Head")
 end
 
-local function GetClosestEnemy()
+local function FindClosestEnemy()
     local closestPlayer = nil
     local closestDistance = CONFIG.AIM_DISTANCE
 
@@ -138,7 +134,7 @@ local function CreateESPLabel(player)
     label.TextSize = 12
     label.Font = Enum.Font.GothamBold
     label.BorderSizePixel = 1
-    label.BorderColor3 = Color3.fromRGB(255,255,255)
+    label.BorderColor3 = Color3.fromRGB(255, 255, 255)
     label.Parent = gui
 
     return label
@@ -146,10 +142,10 @@ end
 
 local function UpdateESP()
     if not CONFIG.ESP_ENABLED then
-        for player, label in pairs(ESPLabels) do
+        for _, label in pairs(ESPLabels) do
             label:Destroy()
-            ESPLabels[player] = nil
         end
+        ESPLabels = {}
         return
     end
 
@@ -194,13 +190,6 @@ local function UpdateESP()
             end
         end
     end
-
-    for player, label in pairs(ESPLabels) do
-        if not player.Parent then
-            label:Destroy()
-            ESPLabels[player] = nil
-        end
-    end
 end
 
 local function DrawLineToTarget(targetPosition)
@@ -225,7 +214,7 @@ local function DrawLineToTarget(targetPosition)
 
     local dx = screenPos.X - centerX
     local dy = screenPos.Y - centerY
-    local distance = math.sqrt(dx*dx + dy*dy)
+    local distance = math.sqrt(dx * dx + dy * dy)
     local angle = math.atan2(dy, dx)
 
     local line = Instance.new("Frame")
@@ -244,40 +233,40 @@ local function UpdateAimbot()
         return
     end
 
-    local target, distance = GetClosestEnemy()
-
+    local target, distance = FindClosestEnemy()
     if target and distance <= CONFIG.AIM_DISTANCE then
         local head = GetHead(target)
         if head then
-            AimbotState.TargetPosition = head.Position
-            RotateCameraTowards(head.Position)
+            local cameraPos = Camera.CFrame.Position
+            local direction = (head.Position - cameraPos).Unit
+
+            if CONFIG.SMOOTH_AIM then
+                local currentDir = Camera.CFrame.LookVector
+                local blended = currentDir:Lerp(direction, CONFIG.AIM_SENSITIVITY)
+                Camera.CFrame = CFrame.new(cameraPos, cameraPos + blended)
+            else
+                Camera.CFrame = CFrame.new(cameraPos, head.Position)
+            end
+
             DrawLineToTarget(head.Position)
         end
     end
 end
 
--- Mobile Touch Controls
-UserInputService.TouchBegan:Connect(function(touch, processed)
+UserInputService.TouchBegan:Connect(function(_, processed)
     if processed then return end
     AimbotActive = true
 end)
 
-UserInputService.TouchEnded:Connect(function(touch, processed)
+UserInputService.TouchEnded:Connect(function(_, processed)
     if processed then return end
     AimbotActive = false
 end)
 
--- UI Tabs
-local MainTab = Window:CreateTab("Main", 13047715)
-local SettingTab = Window:CreateTab("Settings", 3926305)
-local InfoTab = Window:CreateTab("Info", 5028892)
-
--- Main Tab
-MainTab:CreateLabel("SC Aimbot Mobile v1.0")
-
+MainTab:CreateLabel("SC Aimbot Mobile")
 MainTab:CreateToggle({
     Name = "Enable Aimbot",
-    CurrentValue = CONFIG.AIMBOT_ENABLED,
+    CurrentValue = true,
     Callback = function(value)
         CONFIG.AIMBOT_ENABLED = value
     end
@@ -285,7 +274,7 @@ MainTab:CreateToggle({
 
 MainTab:CreateToggle({
     Name = "Enable ESP",
-    CurrentValue = CONFIG.ESP_ENABLED,
+    CurrentValue = true,
     Callback = function(value)
         CONFIG.ESP_ENABLED = value
     end
@@ -293,7 +282,7 @@ MainTab:CreateToggle({
 
 MainTab:CreateToggle({
     Name = "Team Check",
-    CurrentValue = CONFIG.TEAM_CHECK,
+    CurrentValue = true,
     Callback = function(value)
         CONFIG.TEAM_CHECK = value
     end
@@ -301,20 +290,16 @@ MainTab:CreateToggle({
 
 MainTab:CreateToggle({
     Name = "Draw Line",
-    CurrentValue = CONFIG.DRAW_LINES,
+    CurrentValue = true,
     Callback = function(value)
         CONFIG.DRAW_LINES = value
     end
 })
 
-MainTab:CreateLabel("📱 TOUCH CONTROLS:")
-MainTab:CreateLabel("Hold your finger to aim")
+MainTab:CreateLabel("Touch and hold to aim")
 MainTab:CreateLabel("Release to stop aiming")
 
--- Settings Tab
-SettingTab:CreateLabel("Aimbot Settings")
-
-SettingTab:CreateSlider({
+SettingsTab:CreateSlider({
     Name = "Aim Distance",
     Range = {10, 300},
     Increment = 5,
@@ -325,7 +310,7 @@ SettingTab:CreateSlider({
     end
 })
 
-SettingTab:CreateSlider({
+SettingsTab:CreateSlider({
     Name = "Aim Sensitivity",
     Range = {0.01, 1},
     Increment = 0.01,
@@ -336,17 +321,7 @@ SettingTab:CreateSlider({
     end
 })
 
-SettingTab:CreateToggle({
-    Name = "Smooth Aiming",
-    CurrentValue = CONFIG.SMOOTH_AIM,
-    Callback = function(value)
-        CONFIG.SMOOTH_AIM = value
-    end
-})
-
-SettingTab:CreateLabel("ESP Settings")
-
-SettingTab:CreateSlider({
+SettingsTab:CreateSlider({
     Name = "ESP Distance",
     Range = {50, 500},
     Increment = 10,
@@ -357,44 +332,29 @@ SettingTab:CreateSlider({
     end
 })
 
--- Info Tab
-InfoTab:CreateLabel("SC Aimbot Mobile")
-InfoTab:CreateLabel("Version: 1.0")
+SettingsTab:CreateToggle({
+    Name = "Smooth Aiming",
+    CurrentValue = true,
+    Callback = function(value)
+        CONFIG.SMOOTH_AIM = value
+    end
+})
 
 InfoTab:CreateParagraph({
     Title = "Features",
-    Content = "✓ ESP Player Detection\n✓ Auto Aim System\n✓ Team Check\n✓ Line Tracer\n✓ Mobile Optimized"
+    Content = "ESP Player\nAimbot\nTeam Check\nLine Tracer\nMobile Only"
 })
 
 InfoTab:CreateParagraph({
     Title = "Controls",
-    Content = "Touch and hold to activate aimbot. Release finger to stop. Use toggles and sliders to customize settings."
+    Content = "Touch and hold on screen to activate the aimbot. Release to stop."
 })
 
-InfoTab:CreateButton({
-    Name = "Unload Script",
-    Callback = function()
-        Rayfield:Destroy()
-    end
-})
-
--- Main Loop
 RunService.RenderStepped:Connect(function()
     if not CONFIG.ENABLED then return end
     UpdateESP()
     UpdateAimbot()
 end)
 
--- Cleanup
-LocalPlayer.Destroying:Connect(function()
-    for _, label in pairs(ESPLabels) do
-        label:Destroy()
-    end
-    local espGui = LocalPlayer.PlayerGui:FindFirstChild("ESPGui")
-    if espGui then espGui:Destroy() end
-    local lineGui = LocalPlayer.PlayerGui:FindFirstChild("LineGui")
-    if lineGui then lineGui:Destroy() end
-end)
-
-print("[SC Aimbot Mobile] Script Loaded!")
-print("[SC Aimbot Mobile] Touch and hold to aim!")
+print("[SC Aimbot Mobile] Loaded")
+print("[SC Aimbot Mobile] Touch and hold to aim")
